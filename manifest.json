@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Task Yungu 卡片置顶与隐藏",
+  "version": "1.0.0",
+  "description": "为 task.yungu.org 的 studenttabcardbox 卡片增加置顶/隐藏并记住状态。",
+  "permissions": [
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://task.yungu.org/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}

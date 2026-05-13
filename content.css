@@ -1,0 +1,36 @@
+.yungu-card-wrap {
+  width: 100%;
+}
+
+.yungu-card-wrap.yungu-hidden-preview {
+  opacity: 0.45;
+}
+
+.yungu-tools-bar {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.yungu-tool-btn {
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #111827;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.yungu-tool-btn:hover {
+  background: #f3f4f6;
+}
+
+.yungu-tool-btn.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
