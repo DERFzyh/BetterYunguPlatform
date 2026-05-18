@@ -12,7 +12,8 @@
         "https://task.yungu.org/*"
       ],
       "js": [
-        "content.js"
+        "content.js",
+        "mark-submit.js"
       ],
       "css": [
         "content.css"
