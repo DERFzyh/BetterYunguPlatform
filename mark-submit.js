@@ -312,40 +312,46 @@
 
   let lastHash = '';
   let runTimer = null;
+  let initialRunDone = false;
 
+  /** 延迟执行 run()，用于 hash 变化后等待 DOM 渲染 */
   function scheduleRun() {
     if (runTimer) clearTimeout(runTimer);
     runTimer = setTimeout(() => {
       runTimer = null;
       const currentHash = window.location.hash;
+      // 首次加载时 lastHash 已经是当前 hash，两者相等；
+      // 后续 hash 变化时两者不等，才需要清理旧 UI 并重新 run
       if (currentHash !== lastHash) {
-        lastHash = currentHash;
-        // 清理旧 UI
         const old = document.getElementById(BTN_CONTAINER_ID);
         if (old) old.remove();
-        run();
       }
+      lastHash = currentHash;
+      run();
     }, 800);
   }
 
-  // 监听 hash 变化
-  window.addEventListener('hashchange', scheduleRun);
-
-  // 页面首次加载
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      lastHash = window.location.hash;
-      scheduleRun();
-    });
-  } else {
+  /** 立即执行（不延迟），用于首次加载和 SPA hash 变化 */
+  function doRun() {
     lastHash = window.location.hash;
     scheduleRun();
   }
 
-  // 同时监听 DOM 变化（SPA 内部跳转可能不触发 hashchange）
+  // 监听 hash 变化（用户点击页面内导航）
+  window.addEventListener('hashchange', doRun);
+
+  // 页面首次加载：先尝试立即 run（可能在 document_idle 时 DOM 已就绪），
+  // 同时监听 DOM 变化作为兜底
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', doRun);
+  } else {
+    doRun();
+  }
+
+  // SPA 内部跳转可能不触发 hashchange，用 MutationObserver 兜底
   const observer = new MutationObserver(() => {
     if (isTaskDetailPage() && window.location.hash !== lastHash) {
-      scheduleRun();
+      doRun();
     }
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
