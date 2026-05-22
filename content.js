@@ -11,6 +11,10 @@
   const WRAP_ATTR = "data-yungu-wrap";
   const HIDDEN_CLASS = "yungu-hidden-by-extension";
   const CARD_CLASS_PATTERN = /(^|\s)studenttabcardbox___[^\s]*/i;
+  const SEARCH_BAR_CLASS = "yungu-search-bar";
+  const SEARCH_INPUT_CLASS = "yungu-search-input";
+  const SEARCH_CLEAR_CLASS = "yungu-search-clear";
+  const NO_RESULTS_CLASS = "yungu-no-results";
   const FAB_ID = "yungu-fab";
   const TOAST_ID = "yungu-toast";
   const FEEDBACK_BTN_SELECTOR = ".publicService_feedbackBtn";
@@ -23,6 +27,7 @@
   let observerPaused = false;
   let hideFeedbackEnabled = true;
   let showHiddenTasks = false;
+  let searchQuery = "";
   
   function isTargetCard(element) {
     if (!(element instanceof HTMLElement)) return false;
@@ -330,7 +335,130 @@
     });
   }
 
+  function injectSearchBar() {
+    const taskHead = document.querySelector('[class*="taskHead___"]');
+    if (!taskHead) return;
+    const parent = taskHead.parentElement;
+    if (!parent) return;
+    if (parent.querySelector(`.${SEARCH_BAR_CLASS}`)) return;
+
+    const bar = document.createElement("div");
+    bar.className = SEARCH_BAR_CLASS;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = SEARCH_INPUT_CLASS;
+    input.placeholder = "搜索任务名称或课程...";
+    input.value = searchQuery;
+
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = SEARCH_CLEAR_CLASS;
+    clearBtn.textContent = "×";
+    clearBtn.style.display = searchQuery ? "" : "none";
+
+    bar.appendChild(input);
+    bar.appendChild(clearBtn);
+    parent.insertBefore(bar, taskHead.nextSibling);
+
+    let debounceTimer;
+    input.addEventListener("input", () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        searchQuery = input.value.trim();
+        clearBtn.style.display = searchQuery ? "" : "none";
+        performSearch();
+      }, 200);
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        input.value = "";
+        searchQuery = "";
+        clearBtn.style.display = "none";
+        performSearch();
+      }
+    });
+
+    clearBtn.addEventListener("click", () => {
+      input.value = "";
+      searchQuery = "";
+      clearBtn.style.display = "none";
+      input.focus();
+      performSearch();
+    });
+  }
+
+  function performSearch() {
+    const wraps = document.querySelectorAll(`[${WRAP_ATTR}="1"]`);
+
+    document.querySelectorAll(`.${NO_RESULTS_CLASS}`).forEach((el) => el.remove());
+
+    if (!searchQuery) {
+      Array.from(wraps).forEach((w) => {
+        if (w instanceof HTMLElement) w.style.removeProperty("display");
+      });
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const results = [];
+
+    wraps.forEach((wrap) => {
+      if (!(wrap instanceof HTMLElement)) return;
+      const card = wrap.querySelector('[class*="tabCard___"]');
+      if (!card) {
+        wrap.style.display = "none";
+        return;
+      }
+
+      const titleEl = card.querySelector('[class*="title___"]');
+      const courseEl = card.querySelector('[class*="courseName___"]');
+      const title = titleEl ? titleEl.textContent.trim() : "";
+      const course = courseEl ? courseEl.textContent.trim() : "";
+      const lowTitle = title.toLowerCase();
+      const lowCourse = course.toLowerCase();
+
+      let score = 0;
+      if (lowTitle === query) score = 100;
+      else if (lowTitle.startsWith(query)) score = 80;
+      else if (lowTitle.includes(query)) score = 60;
+      else if (lowCourse.includes(query)) score = 30;
+
+      if (score > 0) {
+        results.push({ wrap, score });
+      } else {
+        wrap.style.display = "none";
+      }
+    });
+
+    if (results.length === 0) {
+      const searchBar = document.querySelector(`.${SEARCH_BAR_CLASS}`);
+      if (searchBar) {
+        const msg = document.createElement("div");
+        msg.className = NO_RESULTS_CLASS;
+        msg.textContent = `未找到与"${searchQuery}"相关的任务`;
+        searchBar.parentElement.insertBefore(msg, searchBar.nextSibling);
+      }
+      return;
+    }
+
+    results.sort((a, b) => b.score - a.score);
+
+    const parent = results[0].wrap.parentElement;
+    if (parent) {
+      results.forEach(({ wrap }) => parent.appendChild(wrap));
+    }
+
+    results.forEach(({ wrap }) => {
+      if (!wrap.classList.contains(HIDDEN_CLASS)) {
+        wrap.style.removeProperty("display");
+      }
+    });
+  }
+
   function scanAndEnhance() {
+    injectSearchBar();
     if (observerPaused) return;
     observerPaused = true;
     hideFeedbackButton();
@@ -354,6 +482,9 @@
       if (wrap.querySelector(`[${TOOL_ATTR}="1"]`)) return;
       buildTools(card, wrap, key);
     });
+    if (searchQuery) {
+      performSearch();
+    }
     observerPaused = false;
     return cards.length;
   }

@@ -34,3 +34,65 @@
   background: #eff6ff;
   color: #1d4ed8;
 }
+
+.yungu-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  position: relative;
+}
+
+.yungu-search-input {
+  flex: 1;
+  height: 32px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 0 30px 0 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.yungu-search-input:focus {
+  border-color: #2563eb;
+}
+
+.yungu-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.yungu-search-clear {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: #9ca3af;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.yungu-search-clear:hover {
+  background: #6b7280;
+}
+
+.yungu-no-results {
+  text-align: center;
+  padding: 40px 16px;
+  color: #9ca3af;
+  font-size: 14px;
+}
