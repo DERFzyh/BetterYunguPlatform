@@ -12,6 +12,17 @@
         "https://task.yungu.org/*"
       ],
       "js": [
+        "intercept.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://task.yungu.org/*"
+      ],
+      "js": [
         "content.js",
         "mark-submit.js"
       ],

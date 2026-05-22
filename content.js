@@ -19,33 +19,10 @@
   const HIDDEN_PREVIEW_CLASS = "yungu-hidden-preview";
   const CARD_HIDDEN_ATTR = "data-yungu-hidden";
   const CARD_KEY_ATTR = "data-yungu-key";
-  function interceptTaskApi() {
-    const originalFetch = window.fetch;
-    window.fetch = function(input, init) {
-      const url = typeof input === 'string' ? input : input?.url;
-      if (url && url.includes('/getAchievementDetail/fileList') && init?.body) {
-        try {
-          const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
-          if (body && typeof body === 'object') {
-            body.pageSize = 1000;
-            const newBody = JSON.stringify(body);
-            const newInit = { ...init, body: newBody };
-            return originalFetch.call(window, input, newInit);
-          }
-        } catch (e) {
-          // ignore parse errors
-        }
-      }
-      return originalFetch.call(window, input, init);
-    };
-  }
-
   let scanTimer = null;
   let observerPaused = false;
   let hideFeedbackEnabled = true;
   let showHiddenTasks = false;
-  
-  interceptTaskApi();
   
   function isTargetCard(element) {
     if (!(element instanceof HTMLElement)) return false;
