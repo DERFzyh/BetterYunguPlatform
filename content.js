@@ -16,24 +16,37 @@
   const FEEDBACK_BTN_SELECTOR = ".publicService_feedbackBtn";
   const FEEDBACK_TOGGLE_KEY = "yungu-hide-feedback-enabled-v1";
   const SHOW_HIDDEN_TASKS_KEY = "yungu-show-hidden-tasks-v1";
-  const UNPAGED_LIST_KEY = "yungu-unpaged-list-enabled-v1";
   const HIDDEN_PREVIEW_CLASS = "yungu-hidden-preview";
   const CARD_HIDDEN_ATTR = "data-yungu-hidden";
   const CARD_KEY_ATTR = "data-yungu-key";
-  const ARCHIVED_ATTR = "data-yungu-archived";
-  const UNPAGED_LIST_ID = "yungu-unpaged-list";
-  const PAGINATION_ROOT_SELECTORS = [
-    ".ant-pagination",
-    '[class*="pagination"]',
-    '[class*="Pagination"]'
-  ];
+  function interceptTaskApi() {
+    const originalFetch = window.fetch;
+    window.fetch = function(input, init) {
+      const url = typeof input === 'string' ? input : input?.url;
+      if (url && url.includes('/getAchievementDetail/fileList') && init?.body) {
+        try {
+          const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
+          if (body && typeof body === 'object') {
+            body.pageSize = 1000;
+            const newBody = JSON.stringify(body);
+            const newInit = { ...init, body: newBody };
+            return originalFetch.call(window, input, newInit);
+          }
+        } catch (e) {
+          // ignore parse errors
+        }
+      }
+      return originalFetch.call(window, input, init);
+    };
+  }
+
   let scanTimer = null;
-  let unpagedTimer = null;
   let observerPaused = false;
-  let unpagedEnabled = true;
-  let unpagedRunning = false;
   let hideFeedbackEnabled = true;
   let showHiddenTasks = false;
+  
+  interceptTaskApi();
+  
   function isTargetCard(element) {
     if (!(element instanceof HTMLElement)) return false;
     const className = element.className || "";
@@ -59,13 +72,12 @@
     return cards;
   }
 
-
   let cardIdSeed = 0;
 
   function readState(key) {
     return new Promise((resolve) => {
       chrome.storage.local.get([key], (result) => {
-        resolve(result[key] || { pinned: false, hidden: false });
+        resolve(result[key] || { hidden: false });
       });
     });
   }
@@ -162,24 +174,12 @@
           setHidden(wrap, Boolean(state.hidden));
           return;
         }
-        // 兼容旧版本：没有存储 key 时，用当前标记/按钮状态兜底。
         const hiddenByAttr = wrap.getAttribute(CARD_HIDDEN_ATTR) === "1";
-        const hiddenBtn = wrap.querySelector(".yungu-tool-btn.is-active:last-child");
+        const hiddenBtn = wrap.querySelector(".yungu-tool-btn.is-active");
         const hiddenByButton = hiddenBtn instanceof HTMLElement && hiddenBtn.textContent?.includes("取消隐藏");
         setHidden(wrap, Boolean(hiddenByAttr || hiddenByButton));
       })
     );
-  }
-
-  function setPinned(targetElement, pinned) {
-    const parent = targetElement.parentElement;
-    if (!parent) return;
-
-    if (pinned) {
-      parent.prepend(targetElement);
-    } else {
-      parent.append(targetElement);
-    }
   }
 
   function updateButtonState(button, active, activeText, normalText) {
@@ -187,20 +187,10 @@
     button.textContent = active ? activeText : normalText;
   }
 
-  async function applyCardState(targetElement, key, pinButton, hideButton) {
+  async function applyCardState(targetElement, key, hideButton) {
     const state = await readState(key);
-    setPinned(targetElement, Boolean(state.pinned));
     setHidden(targetElement, Boolean(state.hidden));
-    updateButtonState(pinButton, Boolean(state.pinned), "取消置顶", "置顶");
     updateButtonState(hideButton, Boolean(state.hidden), "取消隐藏", "隐藏");
-  }
-
-  async function togglePinned(targetElement, key, pinButton) {
-    const state = await readState(key);
-    const next = { ...state, pinned: !state.pinned };
-    await writeState(key, next);
-    setPinned(targetElement, Boolean(next.pinned));
-    updateButtonState(pinButton, Boolean(next.pinned), "取消置顶", "置顶");
   }
 
   async function toggleHidden(targetElement, key, hideButton) {
@@ -229,30 +219,20 @@
     tools.className = "yungu-tools-bar";
     tools.setAttribute(TOOL_ATTR, "1");
 
-    const pinButton = document.createElement("button");
-    pinButton.type = "button";
-    pinButton.className = "yungu-tool-btn";
-    pinButton.textContent = "置顶";
-
     const hideButton = document.createElement("button");
     hideButton.type = "button";
     hideButton.className = "yungu-tool-btn";
     hideButton.textContent = "隐藏";
 
-    pinButton.addEventListener("click", () => {
-      togglePinned(wrap, key, pinButton);
-    });
-
     hideButton.addEventListener("click", () => {
       toggleHidden(wrap, key, hideButton);
     });
 
-    tools.appendChild(pinButton);
     tools.appendChild(hideButton);
     wrap.setAttribute(CARD_KEY_ATTR, key);
     wrap.appendChild(tools);
 
-    applyCardState(wrap, key, pinButton, hideButton);
+    applyCardState(wrap, key, hideButton);
   }
 
   function showToast(text) {
@@ -357,149 +337,6 @@
     fab.style.border = showHiddenTasks ? "1px solid #16a34a" : "1px solid #2563eb";
   }
 
-  function sleep(ms) {
-    return new Promise((resolve) => {
-      window.setTimeout(resolve, ms);
-    });
-  }
-
-  function isElementDisabled(element) {
-    if (!(element instanceof HTMLElement)) return true;
-    if (element.hasAttribute("disabled")) return true;
-    if (element.getAttribute("aria-disabled") === "true") return true;
-    const className = element.className || "";
-    if (typeof className === "string" && /disabled/i.test(className)) return true;
-    return false;
-  }
-
-  function findNextPageButton() {
-    const directSelectors = [
-      ".ant-pagination-next button",
-      ".ant-pagination-next",
-      '[aria-label*="next" i]',
-      '[title*="下一页"]'
-    ];
-    for (const selector of directSelectors) {
-      const candidate = document.querySelector(selector);
-      if (!(candidate instanceof HTMLElement)) continue;
-      if (!isElementDisabled(candidate) && !isElementDisabled(candidate.parentElement)) {
-        return candidate;
-      }
-    }
-    const allButtons = document.querySelectorAll("button, a");
-    for (const button of allButtons) {
-      if (!(button instanceof HTMLElement)) continue;
-      const text = (button.textContent || "").trim();
-      if (!text) continue;
-      if (text === "下一页" || text === "下页" || text === ">") {
-        if (!isElementDisabled(button) && !isElementDisabled(button.parentElement)) {
-          return button;
-        }
-      }
-    }
-    return null;
-  }
-
-  function findTaskListHostFromWraps(wraps) {
-    const parentCount = new Map();
-    wraps.forEach((wrap) => {
-      const parent = wrap.parentElement;
-      if (!parent) return;
-      const count = parentCount.get(parent) || 0;
-      parentCount.set(parent, count + 1);
-    });
-    let host = null;
-    let maxCount = 0;
-    parentCount.forEach((count, parent) => {
-      if (count > maxCount) {
-        maxCount = count;
-        host = parent;
-      }
-    });
-    return host;
-  }
-
-  function ensureUnpagedContainer(taskListHost) {
-    if (!(taskListHost instanceof HTMLElement)) return null;
-    let container = document.getElementById(UNPAGED_LIST_ID);
-    if (container instanceof HTMLElement) return container;
-    container = document.createElement("div");
-    container.id = UNPAGED_LIST_ID;
-    container.style.width = "100%";
-    container.style.display = "flex";
-    container.style.flexDirection = "column";
-    container.style.gap = "12px";
-    taskListHost.parentElement?.insertBefore(container, taskListHost);
-    return container;
-  }
-
-  function hidePaginationRoots() {
-    PAGINATION_ROOT_SELECTORS.forEach((selector) => {
-      const roots = document.querySelectorAll(selector);
-      roots.forEach((root) => {
-        if (!(root instanceof HTMLElement)) return;
-        root.style.display = "none";
-      });
-    });
-  }
-
-  function collectUnarchivedWraps() {
-    const wraps = document.querySelectorAll(`[${WRAP_ATTR}="1"]`);
-    const result = [];
-    wraps.forEach((wrap) => {
-      if (!(wrap instanceof HTMLElement)) return;
-      if (wrap.getAttribute(ARCHIVED_ATTR) === "1") return;
-      if (wrap.closest(`#${UNPAGED_LIST_ID}`)) return;
-      result.push(wrap);
-    });
-    return result;
-  }
-
-  function moveCurrentPageToUnpagedContainer() {
-    const wraps = collectUnarchivedWraps();
-    if (!wraps.length) return 0;
-    const host = findTaskListHostFromWraps(wraps);
-    const container = ensureUnpagedContainer(host);
-    if (!(container instanceof HTMLElement)) return 0;
-    let moved = 0;
-    wraps.forEach((wrap) => {
-      if (!(wrap instanceof HTMLElement)) return;
-      wrap.setAttribute(ARCHIVED_ATTR, "1");
-      container.appendChild(wrap);
-      moved += 1;
-    });
-    return moved;
-  }
-
-  async function runUnpagedListFlow() {
-    if (!unpagedEnabled || unpagedRunning) return;
-    unpagedRunning = true;
-    try {
-      let guard = 0;
-      while (guard < 80) {
-        guard += 1;
-        scanAndEnhance();
-        moveCurrentPageToUnpagedContainer();
-        hidePaginationRoots();
-        const nextButton = findNextPageButton();
-        if (!(nextButton instanceof HTMLElement)) break;
-        nextButton.click();
-        await sleep(700);
-      }
-    } finally {
-      unpagedRunning = false;
-    }
-  }
-
-  function scheduleUnpagedFlow() {
-    if (!unpagedEnabled) return;
-    if (unpagedTimer) return;
-    unpagedTimer = window.setTimeout(() => {
-      unpagedTimer = null;
-      runUnpagedListFlow();
-    }, 350);
-  }
-
   function hideFeedbackButton() {
     const feedbackButtons = document.querySelectorAll(FEEDBACK_BTN_SELECTOR);
     feedbackButtons.forEach((element) => {
@@ -552,7 +389,6 @@
       const matchedCount = scanAndEnhance();
       if (matchedCount > 0) {
         ensureFab();
-        scheduleUnpagedFlow();
       } else {
         removeFab();
       }
@@ -567,12 +403,10 @@
   window.addEventListener("hashchange", scheduleScan);
   Promise.all([
     readBooleanState(FEEDBACK_TOGGLE_KEY, true),
-    readBooleanState(SHOW_HIDDEN_TASKS_KEY, false),
-    readBooleanState(UNPAGED_LIST_KEY, true)
-  ]).then(([feedbackValue, showHiddenValue, unpagedValue]) => {
+    readBooleanState(SHOW_HIDDEN_TASKS_KEY, false)
+  ]).then(([feedbackValue, showHiddenValue]) => {
     hideFeedbackEnabled = feedbackValue;
     showHiddenTasks = showHiddenValue;
-    unpagedEnabled = unpagedValue;
     scheduleScan();
   });
 })();
