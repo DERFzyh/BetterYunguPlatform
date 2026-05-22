@@ -28,6 +28,8 @@
   let hideFeedbackEnabled = true;
   let showHiddenTasks = false;
   let searchQuery = "";
+
+  const SECTION_TITLE_TEXTS = ["近期要交", "今天要交", "明天要交", "已逾期"];
   
   function isTargetCard(element) {
     if (!(element instanceof HTMLElement)) return false;
@@ -335,6 +337,16 @@
     });
   }
 
+  function hideSectionTitles() {
+    document.querySelectorAll('[class*="title___"]').forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      if (el.closest('[class*="tabCard___"]')) return;
+      const text = el.textContent.trim();
+      const matched = SECTION_TITLE_TEXTS.some((t) => text.includes(t));
+      if (matched) el.style.display = "none";
+    });
+  }
+
   function injectSearchBar() {
     const taskHead = document.querySelector('[class*="taskHead___"]');
     if (!taskHead) return;
@@ -462,6 +474,7 @@
     if (observerPaused) return;
     observerPaused = true;
     hideFeedbackButton();
+    hideSectionTitles();
     refreshHiddenTaskDisplay();
     const cards = collectCards();
     cards.forEach((card, index) => {
